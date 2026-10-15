@@ -30,8 +30,26 @@ def pass_at_1(
 
 
 def extract_code_blocks(text: str) -> str:
-    # Pattern to match ```...``` blocks
+    """Return the first fenced code block in a completion.
+
+    ``gen_prefix`` already opens a fence for the model to continue, so upstream
+    prepends a bare ``` opener to pair with the model's closing fence. Models
+    whose chat template *closes* that prefill fence before generating instead
+    open their own, leaving two adjacent openers and a single closer: no balanced
+    pair exists, the regex matches nothing, and every such sample scores zero.
+
+    Collapse adjacent openers before matching, and append a closer when the
+    completion left one open. Returns "" when no block is present, as upstream
+    did.
+    """
     pattern = r"```(?:\w+)?\n?(.*?)\n?```"
+    # A completion that already carries a complete fenced block is extracted
+    # directly. This is the shape produced when the model's chat template closes
+    # the verse the gen_prefix left open and opens its own.
+    if text.count("```") >= 2:
+        matches = re.findall(pattern, text, re.DOTALL)
+        if matches:
+            return matches[0]
     # (+ ```) as we add the opening "```python" to the gen_prefix
     matches = re.findall(pattern, r"```" + text, re.DOTALL)
     # if no matches, try to match ```...``` blocks (after removing the language)
